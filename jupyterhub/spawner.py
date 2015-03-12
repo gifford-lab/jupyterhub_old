@@ -6,7 +6,7 @@
 import errno
 import os
 import pipes
-import pwd
+import pwd, grp
 import re
 import signal
 import sys
@@ -275,6 +275,8 @@ def set_user_setuid(username):
     uid = user.pw_uid
     gid = user.pw_gid
     home = user.pw_dir
+    if home.startswith("/afs/"):
+        home = "/cluster/" + username
     
     def preexec():
         # don't forward signals
