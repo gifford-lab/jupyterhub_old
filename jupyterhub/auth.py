@@ -136,6 +136,12 @@ class LocalAuthenticator(Authenticator):
         check_call(useradd + [name])
 
 
+class SSLAuthenticator(Authenticator):
+    @gen.coroutine
+    def authenticate(self, handler, data):
+        print(data)
+        return None
+
 class PAMAuthenticator(LocalAuthenticator):
     """Authenticate local *ix users with PAM"""
     encoding = Unicode('utf8', config=True,
