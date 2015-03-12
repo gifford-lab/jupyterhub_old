@@ -5,9 +5,9 @@
 # FROM jupyter/jupyterhub:latest
 #
 
-FROM ipython/ipython
+FROM ipython/scipystack
 
-MAINTAINER Jupyter Project <jupyter@googlegroups.com>
+MAINTAINER Matt Edwards <matted@mit.edu>
 
 # install js dependencies
 RUN npm install -g configurable-http-proxy
@@ -31,5 +31,5 @@ WORKDIR /srv/jupyterhub/
 
 EXPOSE 8000
 
-ONBUILD ADD jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
+# ONBUILD ADD jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
 CMD ["jupyterhub", "-f", "/srv/jupyterhub/jupyterhub_config.py"]
