@@ -4,13 +4,14 @@
 #
 # FROM jupyter/jupyterhub:latest
 #
-
 FROM ipython/scipystack
 
 MAINTAINER Matt Edwards <matted@mit.edu>
 
 # install js dependencies
-RUN npm install -g configurable-http-proxy
+ADD configurable-http-proxy /tmp/configurable-http-proxy
+WORKDIR /tmp/configurable-http-proxy
+RUN npm install -g
 
 RUN mkdir -p /srv/
 

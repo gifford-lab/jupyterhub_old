@@ -139,7 +139,7 @@ class LocalAuthenticator(Authenticator):
 class SSLAuthenticator(Authenticator):
     @gen.coroutine
     def authenticate(self, handler, data):
-        print(data)
+        raise Exception(str(data))
         return None
 
 class PAMAuthenticator(LocalAuthenticator):

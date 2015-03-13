@@ -72,6 +72,7 @@ aliases = {
     'y': 'JupyterHub.answer_yes',
     'ssl-key': 'JupyterHub.ssl_key',
     'ssl-cert': 'JupyterHub.ssl_cert',
+    'ssl-ca': 'JupyterHub.ssl_ca',
     'ip': 'JupyterHub.ip',
     'port': 'JupyterHub.port',
     'pid-file': 'JupyterHub.pid_file',
@@ -198,12 +199,18 @@ class JupyterHub(Application):
     
     ssl_key = Unicode('', config=True,
         help="""Path to SSL key file for the public facing interface of the proxy
-        
+
         Use with ssl_cert
         """
     )
     ssl_cert = Unicode('', config=True,
         help="""Path to SSL certificate file for the public facing interface of the proxy
+        
+        Use with ssl_key
+        """
+    )
+    ssl_ca = Unicode('', config=True,
+        help="""Path to SSL certificate authority file for the public facing interface of the proxy
         
         Use with ssl_key
         """
@@ -730,6 +737,9 @@ class JupyterHub(Application):
             cmd.extend(['--ssl-key', self.ssl_key])
         if self.ssl_cert:
             cmd.extend(['--ssl-cert', self.ssl_cert])
+        if self.ssl_ca:
+            cmd.extend(['--ssl-ca', self.ssl_ca])
+
         self.log.info("Starting proxy @ %s", self.proxy.public_server.url)
         self.log.debug("Proxy cmd: %s", cmd)
         self.proxy_process = Popen(cmd, env=env)
