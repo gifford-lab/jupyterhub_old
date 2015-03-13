@@ -76,4 +76,5 @@ EXPOSE 8000
 VOLUME /notebooks
 
 # ONBUILD ADD jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
-CMD ["jupyterhub", "-f", "/srv/jupyterhub/jupyterhub_config.py"]
+# CMD ["jupyterhub", "-f", "/srv/jupyterhub/jupyterhub_config.py"]
+ENTRYPOINT ["jupyterhub", "-f", "/srv/jupyterhub/jupyterhub_config.py"]
