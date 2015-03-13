@@ -1,0 +1,3 @@
+[submodule "configurable-http-proxy"]
+	path = configurable-http-proxy
+	url = https://github.com/gifford-lab/configurable-http-proxy.git
