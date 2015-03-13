@@ -269,7 +269,6 @@ class JupyterHub(Application):
     hub_ip = Unicode('localhost', config=True,
         help="The ip for this process"
     )
-    
     hub_prefix = URLPrefix('/hub/', config=True,
         help="The prefix for the hub server. Must not be '/'"
     )
@@ -723,6 +722,7 @@ class JupyterHub(Application):
             return
 
         env = os.environ.copy()
+        os.environ["CONFIGPROXY_AUTH_TOKEN"] = self.proxy.auth_token
         env['CONFIGPROXY_AUTH_TOKEN'] = self.proxy.auth_token
         cmd = [self.proxy_cmd,
             '--ip', self.proxy.public_server.ip,

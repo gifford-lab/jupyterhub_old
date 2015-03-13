@@ -3,7 +3,7 @@
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 
-import pwd
+import pwd, os, grp
 from subprocess import check_call, check_output, CalledProcessError
 
 from tornado import gen
@@ -13,6 +13,7 @@ from IPython.config import LoggingConfigurable
 from IPython.utils.traitlets import Bool, Set, Unicode, Any
 
 from .handlers.login import LoginHandler
+from .handlers.base import BaseHandler
 from .utils import url_path_join
 
 class Authenticator(LoggingConfigurable):
@@ -135,12 +136,39 @@ class LocalAuthenticator(Authenticator):
     
         check_call(useradd + [name])
 
+# based on oauthenticator.GitHubOAuthHandler
+class SSLAuthHandler(BaseHandler):
+    @gen.coroutine
+    def get(self):
+        username = yield self.authenticator.authenticate(self)
+        if username:
+            user = self.user_from_username(username)
+            self.set_login_cookie(user)
+            self.redirect(url_path_join(self.hub.server.base_url, 'home'))
+        else:
+            raise web.HTTPError(403)
+
 
 class SSLAuthenticator(Authenticator):
+
+    def get_handlers(self, app):
+        return [(r'/cert_login', SSLAuthHandler)]
+
+    def login_url(self, base_url):
+        return url_path_join(base_url, 'cert_login')
+
     @gen.coroutine
-    def authenticate(self, handler, data):
-        raise Exception(str(data))
-        return None
+    def authenticate(self, handler):
+        token = os.environ.get("CONFIGPROXY_AUTH_TOKEN", "fail without token") # Hacky, but we rely on getting the token in the same way the Node proxy does.
+        username = handler.request.headers["CertEmail " + token]
+        if username is not None:
+            username = username.split("@")[0]
+        try:
+            if pwd.getpwnam(username) and username in grp.getgrnam("cgs").gr_mem:
+                return username
+        except KeyError:
+            pass
+        return
 
 class PAMAuthenticator(LocalAuthenticator):
     """Authenticate local *ix users with PAM"""
