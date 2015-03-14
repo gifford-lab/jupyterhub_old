@@ -332,6 +332,8 @@ class LocalProcessSpawner(Spawner):
     def user_env(self, env):
         env['USER'] = self.user.name
         env['HOME'] = pwd.getpwnam(self.user.name).pw_dir
+        if env['HOME'].startswith("/afs/"):
+            env['HOME'] = "/cluster/" + self.user.name
         return env
     
     def _env_default(self):
