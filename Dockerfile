@@ -3,9 +3,9 @@
 # Build your own derivative images starting with
 #
 # Scipystack has more features installed, but jupyterhub has Python 2 kernel.
-# FROM ipython/scipystack
+FROM ipython/scipystack
 # FROM jupyter/jupyterhub:latest
-FROM ipython/ipython
+# FROM ipython/ipython
 
 MAINTAINER Matt Edwards <matted@mit.edu>
 
@@ -16,29 +16,30 @@ RUN apt-get install -y r-base r-cran-ggplot2 r-recommended
 RUN apt-get install -y python-rpy2 python2.7-rpy2 python-rpy python2.7-rpy
 
 RUN apt-get install -y libsuitesparse-dev 
-RUN apt-get install -y liblapack-dev liblapack3 libblas-dev libblas3 libatlas-dev libatlas-base-dev libatlas3-base cython python-numpy python3-numpy fortran-compiler python-statsmodels python2.7-statsmodels python-sklearn python2.7-sklearn python-pymc
+# RUN apt-get install -y liblapack-dev liblapack3 libblas-dev libblas3 libatlas-dev libatlas-base-dev libatlas3-base cython python-numpy python3-numpy fortran-compiler python-sklearn python2.7-sklearn
+RUN apt-get install -y python-statsmodels python2.7-statsmodels python-pymc
 RUN apt-get install -y python-tz python3-tz python2.7-pyparsing python-pyparsing python3-pyparsing
 
-# RUN pip install --upgrade numpy
-# RUN pip install --upgrade scipy
+RUN pip install --upgrade numpy
+RUN pip install --upgrade scipy
 RUN pip install --upgrade pymc
 RUN pip install --upgrade scikit-learn
-# RUN pip install git+https://github.com/njsmith/scikits-sparse.git
-# RUN pip install git+https://github.com/pymc-devs/pymc
+RUN pip install git+https://github.com/njsmith/scikits-sparse.git
+RUN pip install git+https://github.com/pymc-devs/pymc
 RUN pip install --upgrade git+https://github.com/Theano/Theano.git
 RUN pip install --upgrade statsmodels
 # RUN pip install --upgrade git+https://github.com/statsmodels/statsmodels.git
 # RUN pip install --upgrade git+https://github.com/scikit-learn/scikit-learn.git
-RUN pip install --upgrade seaborn
+# RUN pip install --upgrade seaborn
 RUN pip install --upgrade rpy2
 RUN pip install terminado
 
-# RUN pip3 install --upgrade numpy
-# RUN pip3 install --upgrade scipy
-RUN pip install --upgrade pymc
+RUN pip3 install --upgrade numpy
+RUN pip3 install --upgrade scipy
+RUN pip3 install --upgrade pymc # not on apt
 RUN pip3 install --upgrade scikit-learn
-# RUN pip3 install git+https://github.com/njsmith/scikits-sparse.git
-# RUN pip3 install git+https://github.com/pymc-devs/pymc
+RUN pip3 install git+https://github.com/njsmith/scikits-sparse.git
+RUN pip3 install git+https://github.com/pymc-devs/pymc
 RUN pip3 install --upgrade git+https://github.com/Theano/Theano.git
 RUN pip3 install --upgrade statsmodels
 # RUN pip3 install --upgrade git+https://github.com/statsmodels/statsmodels.git
@@ -56,6 +57,27 @@ ADD requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
+# Trying to get R and other kernels, from jupyter/docker-demo-images.
+
+# Dependencies for the example notebooks
+# RUN apt-get install -y python-networkx # python3-networkx
+# RUN apt-get build-dep -y mpi4py && pip2 install scikit-image vincent dill mpi4py && pip3 install scikit-image vincent dill mpi4py
+
+RUN apt-get install -y vim emacs24-nox
+
+# Julia and R Installation
+RUN apt-get install software-properties-common python-software-properties -y && \
+    add-apt-repository "deb http://cran.rstudio.com/bin/linux/ubuntu trusty/" && \
+    gpg --keyserver keyserver.ubuntu.com --recv-key E084DAB9 && \
+    gpg -a --export E084DAB9 | apt-key add - && \
+    add-apt-repository ppa:staticfloat/juliareleases && \
+    add-apt-repository ppa:staticfloat/julia-deps && \
+    apt-get update && \
+    apt-get install julia -y && \
+    apt-get install libnettle4 && \
+    apt-get install -y r-base r-base-dev r-cran-rcurl libreadline-dev && \
+    pip2 install rpy2 && pip3 install rpy2
+
 ADD configurable-http-proxy /tmp/configurable-http-proxy
 WORKDIR /tmp/configurable-http-proxy
 RUN npm install -g
@@ -67,9 +89,6 @@ WORKDIR /srv/jupyterhub/
 RUN pip3 install .
 
 WORKDIR /srv/jupyterhub/
-
-# Derivative containers should add jupyterhub config,
-# which will be used when starting the application.
 
 EXPOSE 8000
 
