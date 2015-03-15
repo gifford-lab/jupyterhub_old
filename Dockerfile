@@ -78,6 +78,27 @@ RUN apt-get install software-properties-common python-software-properties -y && 
     apt-get install -y r-base r-base-dev r-cran-rcurl libreadline-dev && \
     pip2 install rpy2 && pip3 install rpy2
 
+# IJulia installation
+# RUN julia -e 'Pkg.add("IJulia")'
+# Julia packages
+# RUN julia -e 'Pkg.add("Gadfly")' && julia -e 'Pkg.add("RDatasets")'
+
+# R installation
+RUN echo 'options(repos=structure(c(CRAN="http://cran.rstudio.com")))' >> /etc/R/Rprofile.site
+RUN echo "PKG_CXXFLAGS = '-std=c++11'" >> /etc/R/Makeconf
+RUN echo "install.packages(c('ggplot2', 'XML', 'plyr', 'randomForest', 'Hmisc', 'stringr', 'RColorBrewer', 'reshape', 'reshape2'))" | R --no-save
+RUN echo "install.packages(c('RCurl', 'devtools', 'dplyr'))" | R --no-save
+RUN echo "install.packages(c('httr', 'knitr', 'packrat'))" | R --no-save
+RUN echo "install.packages(c('rmarkdown', 'rvtest', 'testit', 'testthat', 'tidyr', 'shiny'))" | R --no-save
+RUN echo "library(devtools); install_github('armstrtw/rzmq'); install_github('takluyver/IRdisplay'); install_github('takluyver/IRkernel'); IRkernel::installspec()" | R --no-save
+RUN echo "library(devtools); install_github('hadley/lineprof')" | R --no-save
+RUN echo "library(devtools); install_github('rstudio/rticles')" | R --no-save
+RUN echo "library(devtools); install_github('jimhester/covr')" | R --no-save
+
+RUN echo "install.packages(c('base64enc', 'Cairo', 'codetools', 'data.table', 'gridExtra', 'gtable', 'hexbin', 'jpeg', 'Lahman', 'lattice'))" | R --no-save
+RUN echo "install.packages(c('MASS', 'PKI', 'png', 'microbenchmark', 'mgcv', 'mapproj', 'maps', 'maptools', 'mgcv', 'multcomp', 'nlme'))" | R --no-save
+RUN echo "install.packages(c('nycflights13', 'quantreg', 'rJava', 'roxygen2', 'RSQLite', 'XML'))" | R --no-save
+
 ADD configurable-http-proxy /tmp/configurable-http-proxy
 WORKDIR /tmp/configurable-http-proxy
 RUN npm install -g
@@ -88,11 +109,30 @@ WORKDIR /srv/jupyterhub/
 
 RUN pip3 install .
 
+# install kernels
+RUN python2 -m IPython kernelspec install-self
+RUN python3 -m IPython kernelspec install-self
+
+RUN pip install git+https://github.com/Calysto/octave_kernel.git
+RUN npm install -g ijavascript
+RUN pip install git+https://github.com/takluyver/bash_kernel.git
+
+RUN apt-get install -y octave octave-data-smoothing octave-dataframe octave-econometrics octave-financial octave-financial octave-ga octave-gsl octave-image octave-linear-algebra octave-miscellaneous octave-nan octave-nlopt octave-nnet octave-odepkg octave-optim octave-signal octave-sockets octave-specfun octave-statistics octave-strings octave-symbolic octave-tsa
+
+# Copy kernels we just activated to the system-level location.
+# RUN chmod -R a+rwx /root/.julia
+RUN chmod -R a+r /root/.ipython
+RUN cp -r /root/.ipython/kernels/* /usr/local/share/jupyter/kernels/
+
+# Hacky!
+RUN echo "matted ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN echo "thashim ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
 WORKDIR /srv/jupyterhub/
 
 EXPOSE 8000
 
-VOLUME /notebooks
+# VOLUME /notebooks
 
 # ONBUILD ADD jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
 # CMD ["jupyterhub", "-f", "/srv/jupyterhub/jupyterhub_config.py"]
