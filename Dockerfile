@@ -99,6 +99,8 @@ RUN pip install git+https://github.com/takluyver/bash_kernel.git
 
 # Copy kernels we just activated to the system-level location.
 # RUN chmod -R a+rwx /root/.julia
+RUN python2 -m IPython kernelspec install-self
+RUN python3 -m IPython kernelspec install-self
 RUN chmod -R a+r /root/.ipython
 RUN cp -r /root/.ipython/kernels/* /usr/local/share/jupyter/kernels/
 
