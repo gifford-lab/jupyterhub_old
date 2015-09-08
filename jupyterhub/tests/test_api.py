@@ -1,7 +1,10 @@
 """Tests for the REST API"""
 
 import json
+import time
 from datetime import timedelta
+from queue import Queue
+from urllib.parse import urlparse
 
 import requests
 
@@ -59,11 +62,15 @@ def api_request(app, *api_path, **kwargs):
 
     if 'Authorization' not in headers:
         headers.update(auth_header(app.db, 'admin'))
-    
+
     url = ujoin(base_url, 'api', *api_path)
     method = kwargs.pop('method', 'get')
     f = getattr(requests, method)
-    return f(url, **kwargs)
+    resp = f(url, **kwargs)
+    assert "frame-ancestors 'self'" in resp.headers['Content-Security-Policy']
+    assert ujoin(app.hub.server.base_url, "security/csp-report") in resp.headers['Content-Security-Policy']
+    assert 'http' not in resp.headers['Content-Security-Policy']
+    return resp
 
 def test_auth_api(app):
     db = app.db
@@ -78,7 +85,7 @@ def test_auth_api(app):
     r = api_request(app, 'authorizations/token', api_token)
     assert r.status_code == 200
     reply = r.json()
-    assert reply['user'] == user.name
+    assert reply['name'] == user.name
     
     # check fail
     r = api_request(app, 'authorizations/token', api_token,
@@ -90,6 +97,51 @@ def test_auth_api(app):
         headers={'Authorization': 'token: %s' % user.cookie_id},
     )
     assert r.status_code == 403
+
+
+def test_referer_check(app, io_loop):
+    url = app.hub.server.url
+    host = urlparse(url).netloc
+    user = find_user(app.db, 'admin')
+    if user is None:
+        user = add_user(app.db, name='admin', admin=True)
+    cookies = app.login_user('admin')
+    app_user = get_app_user(app, 'admin')
+    # stop the admin's server so we don't mess up future tests
+    io_loop.run_sync(lambda : app.proxy.delete_user(app_user))
+    io_loop.run_sync(app_user.stop)
+    
+    r = api_request(app, 'users',
+        headers={
+            'Authorization': '',
+            'Referer': 'null',
+        }, cookies=cookies,
+    )
+    assert r.status_code == 403
+    r = api_request(app, 'users',
+        headers={
+            'Authorization': '',
+            'Referer': 'http://attack.com/csrf/vulnerability',
+        }, cookies=cookies,
+    )
+    assert r.status_code == 403
+    r = api_request(app, 'users',
+        headers={
+            'Authorization': '',
+            'Referer': url,
+            'Host': host,
+        }, cookies=cookies,
+    )
+    assert r.status_code == 200
+    r = api_request(app, 'users',
+        headers={
+            'Authorization': '',
+            'Referer': ujoin(url, 'foo/bar/baz/bat'),
+            'Host': host,
+        }, cookies=cookies,
+    )
+    assert r.status_code == 200
+
 
 def test_get_users(app):
     db = app.db
@@ -128,6 +180,82 @@ def test_add_user(app):
     assert user is not None
     assert user.name == name
     assert not user.admin
+
+
+def test_get_user(app):
+    name = 'user'
+    r = api_request(app, 'users', name)
+    assert r.status_code == 200
+    user = r.json()
+    user.pop('last_activity')
+    assert user == {
+        'name': name,
+        'admin': False,
+        'server': None,
+        'pending': None,
+    }
+
+
+def test_add_multi_user_bad(app):
+    r = api_request(app, 'users', method='post')
+    assert r.status_code == 400
+    r = api_request(app, 'users', method='post', data='{}')
+    assert r.status_code == 400
+    r = api_request(app, 'users', method='post', data='[]')
+    assert r.status_code == 400
+
+def test_add_multi_user(app):
+    db = app.db
+    names = ['a', 'b']
+    r = api_request(app, 'users', method='post',
+        data=json.dumps({'usernames': names}),
+    )
+    assert r.status_code == 201
+    reply = r.json()
+    r_names = [ user['name'] for user in reply ]
+    assert names == r_names
+    
+    for name in names:
+        user = find_user(db, name)
+        assert user is not None
+        assert user.name == name
+        assert not user.admin
+    
+    # try to create the same users again
+    r = api_request(app, 'users', method='post',
+        data=json.dumps({'usernames': names}),
+    )
+    assert r.status_code == 400
+    
+    names = ['a', 'b', 'ab']
+    
+    # try to create the same users again
+    r = api_request(app, 'users', method='post',
+        data=json.dumps({'usernames': names}),
+    )
+    assert r.status_code == 201
+    reply = r.json()
+    r_names = [ user['name'] for user in reply ]
+    assert r_names == ['ab']
+
+
+def test_add_multi_user_admin(app):
+    db = app.db
+    names = ['c', 'd']
+    r = api_request(app, 'users', method='post',
+        data=json.dumps({'usernames': names, 'admin': True}),
+    )
+    assert r.status_code == 201
+    reply = r.json()
+    r_names = [ user['name'] for user in reply ]
+    assert names == r_names
+    
+    for name in names:
+        user = find_user(db, name)
+        assert user is not None
+        assert user.name == name
+        assert user.admin
+
 
 def test_add_user_bad(app):
     db = app.db
@@ -175,6 +303,18 @@ def test_make_admin(app):
     assert user.name == name
     assert user.admin
 
+def get_app_user(app, name):
+    """Get the User object from the main thread
+    
+    Needed for access to the Spawner.
+    No ORM methods should be called on the result.
+    """
+    q = Queue()
+    def get_user():
+        user = find_user(app.db, name)
+        q.put(user)
+    app.io_loop.add_callback(get_user)
+    return q.get(timeout=2)
 
 def test_spawn(app, io_loop):
     db = app.db
@@ -183,9 +323,10 @@ def test_spawn(app, io_loop):
     r = api_request(app, 'users', name, 'server', method='post')
     assert r.status_code == 201
     assert 'pid' in user.state
-    assert user.spawner is not None
-    assert not user.spawn_pending
-    status = io_loop.run_sync(user.spawner.poll)
+    app_user = get_app_user(app, name)
+    assert app_user.spawner is not None
+    assert not app_user.spawn_pending
+    status = io_loop.run_sync(app_user.spawner.poll)
     assert status is None
     
     assert user.server.base_url == '/user/%s' % name
@@ -203,7 +344,7 @@ def test_spawn(app, io_loop):
     assert r.status_code == 204
     
     assert 'pid' not in user.state
-    status = io_loop.run_sync(user.spawner.poll)
+    status = io_loop.run_sync(app_user.spawner.poll)
     assert status == 0
 
 def test_slow_spawn(app, io_loop):
@@ -217,41 +358,42 @@ def test_slow_spawn(app, io_loop):
     r = api_request(app, 'users', name, 'server', method='post')
     r.raise_for_status()
     assert r.status_code == 202
-    assert user.spawner is not None
-    assert user.spawn_pending
-    assert not user.stop_pending
+    app_user = get_app_user(app, name)
+    assert app_user.spawner is not None
+    assert app_user.spawn_pending
+    assert not app_user.stop_pending
     
     dt = timedelta(seconds=0.1)
     @gen.coroutine
     def wait_spawn():
-        while user.spawn_pending:
+        while app_user.spawn_pending:
             yield gen.Task(io_loop.add_timeout, dt)
     
     io_loop.run_sync(wait_spawn)
-    assert not user.spawn_pending
-    status = io_loop.run_sync(user.spawner.poll)
+    assert not app_user.spawn_pending
+    status = io_loop.run_sync(app_user.spawner.poll)
     assert status is None
 
     @gen.coroutine
     def wait_stop():
-        while user.stop_pending:
+        while app_user.stop_pending:
             yield gen.Task(io_loop.add_timeout, dt)
 
     r = api_request(app, 'users', name, 'server', method='delete')
     r.raise_for_status()
     assert r.status_code == 202
-    assert user.spawner is not None
-    assert user.stop_pending
+    assert app_user.spawner is not None
+    assert app_user.stop_pending
 
     r = api_request(app, 'users', name, 'server', method='delete')
     r.raise_for_status()
     assert r.status_code == 202
-    assert user.spawner is not None
-    assert user.stop_pending
+    assert app_user.spawner is not None
+    assert app_user.stop_pending
     
     io_loop.run_sync(wait_stop)
-    assert not user.stop_pending
-    assert user.spawner is not None
+    assert not app_user.stop_pending
+    assert app_user.spawner is not None
     r = api_request(app, 'users', name, 'server', method='delete')
     assert r.status_code == 400
     
@@ -264,18 +406,19 @@ def test_never_spawn(app, io_loop):
     name = 'badger'
     user = add_user(db, name=name)
     r = api_request(app, 'users', name, 'server', method='post')
-    assert user.spawner is not None
-    assert user.spawn_pending
+    app_user = get_app_user(app, name)
+    assert app_user.spawner is not None
+    assert app_user.spawn_pending
     
     dt = timedelta(seconds=0.1)
     @gen.coroutine
     def wait_pending():
-        while user.spawn_pending:
+        while app_user.spawn_pending:
             yield gen.Task(io_loop.add_timeout, dt)
     
     io_loop.run_sync(wait_pending)
-    assert not user.spawn_pending
-    status = io_loop.run_sync(user.spawner.poll)
+    assert not app_user.spawn_pending
+    status = io_loop.run_sync(app_user.spawner.poll)
     assert status is not None
 
 
@@ -284,3 +427,18 @@ def test_get_proxy(app, io_loop):
     r.raise_for_status()
     reply = r.json()
     assert list(reply.keys()) == ['/']
+
+
+def test_shutdown(app):
+    r = api_request(app, 'shutdown', method='post', data=json.dumps({
+        'servers': True,
+        'proxy': True,
+    }))
+    r.raise_for_status()
+    reply = r.json()
+    for i in range(100):
+        if app.io_loop._running:
+            time.sleep(0.1)
+        else:
+            break
+    assert not app.io_loop._running

@@ -22,6 +22,13 @@ from ..utils import url_path_join
 # pattern for the authentication token header
 auth_header_pat = re.compile(r'^token\s+([^\s]+)$')
 
+# mapping of reason: reason_message
+reasons = {
+    'timeout': "Failed to reach your server."
+        "  Please try again later."
+        "  Contact admin if the issue persists.",
+    'error': "Failed to start your server.  Please contact admin.",
+}
 
 class BaseHandler(RequestHandler):
     """Base Handler class with access to common methods and properties."""
@@ -62,7 +69,40 @@ class BaseHandler(RequestHandler):
     def finish(self, *args, **kwargs):
         """Roll back any uncommitted transactions from the handler."""
         self.db.rollback()
-        super(BaseHandler, self).finish(*args, **kwargs)
+        super().finish(*args, **kwargs)
+    
+    #---------------------------------------------------------------
+    # Security policies
+    #---------------------------------------------------------------
+    
+    @property
+    def csp_report_uri(self):
+        return self.settings.get('csp_report_uri',
+            url_path_join(self.hub.server.base_url, 'security/csp-report')
+        )
+    
+    @property
+    def content_security_policy(self):
+        """The default Content-Security-Policy header
+        
+        Can be overridden by defining Content-Security-Policy in settings['headers']
+        """
+        return '; '.join([
+            "frame-ancestors 'self'",
+            "report-uri " + self.csp_report_uri,
+        ])
+    
+    def set_default_headers(self):
+        """
+        Set any headers passed as tornado_settings['headers'].
+
+        By default sets Content-Security-Policy of frame-ancestors 'self'.
+        """
+        headers = self.settings.get('headers', {})
+        headers.setdefault("Content-Security-Policy", self.content_security_policy)
+        
+        for header_name, header_content in headers.items():
+            self.set_header(header_name, header_content)
 
     #---------------------------------------------------------------
     # Login and cookie-related
@@ -71,6 +111,10 @@ class BaseHandler(RequestHandler):
     @property
     def admin_users(self):
         return self.settings.setdefault('admin_users', set())
+    
+    @property
+    def cookie_max_age_days(self):
+        return self.settings.get('cookie_max_age_days', None)
 
     def get_current_user_token(self):
         """get_current_user from Authorization header token"""
@@ -87,16 +131,25 @@ class BaseHandler(RequestHandler):
     
     def _user_for_cookie(self, cookie_name, cookie_value=None):
         """Get the User for a given cookie, if there is one"""
-        cookie_id = self.get_secure_cookie(cookie_name, cookie_value)
+        cookie_id = self.get_secure_cookie(
+            cookie_name,
+            cookie_value,
+            max_age_days=self.cookie_max_age_days,
+        )
+        def clear():
+            self.clear_cookie(cookie_name, path=self.hub.server.base_url)
+        
         if cookie_id is None:
+            if self.get_cookie(cookie_name):
+                self.log.warn("Invalid or expired cookie token")
+                clear()
             return
         cookie_id = cookie_id.decode('utf8', 'replace')
         user = self.db.query(orm.User).filter(orm.User.cookie_id==cookie_id).first()
         if user is None:
-            # don't log the token itself
             self.log.warn("Invalid cookie token")
             # have cookie, but it's not valid. Clear it and start over.
-            self.clear_cookie(self.hub.server.cookie_name, path=self.hub.server.base_url)
+            clear()
         return user
     
     def get_current_user_cookie(self):
@@ -126,26 +179,44 @@ class BaseHandler(RequestHandler):
             self.db.commit()
         return user
     
-    def clear_login_cookie(self):
-        user = self.get_current_user()
+    def clear_login_cookie(self, name=None):
+        if name is None:
+            user = self.get_current_user()
+        else:
+            user = self.find_user(name)
         if user and user.server:
             self.clear_cookie(user.server.cookie_name, path=user.server.base_url)
         self.clear_cookie(self.hub.server.cookie_name, path=self.hub.server.base_url)
     
     def set_server_cookie(self, user):
         """set the login cookie for the single-user server"""
+        # tornado <4.2 have a bug that consider secure==True as soon as
+        # 'secure' kwarg is passed to set_secure_cookie
+        if  self.request.protocol == 'https':
+            kwargs = {'secure':True}
+        else:
+            kwargs = {}
         self.set_secure_cookie(
             user.server.cookie_name,
             user.cookie_id,
             path=user.server.base_url,
+            **kwargs
         )
     
     def set_hub_cookie(self, user):
         """set the login cookie for the Hub"""
+        # tornado <4.2 have a bug that consider secure==True as soon as
+        # 'secure' kwarg is passed to set_secure_cookie
+        if  self.request.protocol == 'https':
+            kwargs = {'secure':True}
+        else:
+            kwargs = {}
         self.set_secure_cookie(
             self.hub.server.cookie_name,
             user.cookie_id,
-            path=self.hub.server.base_url)
+            path=self.hub.server.base_url,
+            **kwargs
+        )
     
     def set_login_cookie(self, user):
         """Set login cookies for the Hub and single-user server."""
@@ -289,6 +360,7 @@ class BaseHandler(RequestHandler):
             prefix=self.base_url,
             user=user,
             login_url=self.settings['login_url'],
+            login_service=self.authenticator.login_service,
             logout_url=self.settings['logout_url'],
             static_url=self.static_url,
             version_hash=self.version_hash,
@@ -310,7 +382,7 @@ class BaseHandler(RequestHandler):
             # construct the custom reason, if defined
             reason = getattr(exception, 'reason', '')
             if reason:
-                status_message = reason
+                message = reasons.get(reason, reason)
 
         # build template namespace
         ns = dict(
@@ -343,10 +415,11 @@ class PrefixRedirectHandler(BaseHandler):
     Redirects /foo to /prefix/foo, etc.
     """
     def get(self):
-        path = self.request.path[len(self.base_url):]
+        path = self.request.uri[len(self.base_url):]
         self.redirect(url_path_join(
             self.hub.server.base_url, path,
         ), permanent=False)
+
 
 class UserSpawnHandler(BaseHandler):
     """Requests to /user/name handled by the Hub
@@ -373,7 +446,7 @@ class UserSpawnHandler(BaseHandler):
                 yield self.spawn_single_user(current_user)
             # set login cookie anew
             self.set_login_cookie(current_user)
-            without_prefix = self.request.path[len(self.hub.server.base_url):]
+            without_prefix = self.request.uri[len(self.hub.server.base_url):]
             target = url_path_join(self.base_url, without_prefix)
             self.redirect(target)
         else:
@@ -382,9 +455,18 @@ class UserSpawnHandler(BaseHandler):
             self.clear_login_cookie()
             self.redirect(url_concat(
                 self.settings['login_url'],
-                {'next': self.request.path,
+                {'next': self.request.uri,
             }))
+
+class CSPReportHandler(BaseHandler):
+    '''Accepts a content security policy violation report'''
+    @web.authenticated
+    def post(self):
+        '''Log a content security policy violation report'''
+        self.log.warn("Content security violation: %s",
+                      self.request.body.decode('utf8', 'replace'))
 
 default_handlers = [
     (r'/user/([^/]+)/?.*', UserSpawnHandler),
+    (r'/security/csp-report', CSPReportHandler),
 ]

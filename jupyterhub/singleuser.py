@@ -1,19 +1,30 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """Extend regular notebook server to be aware of multiuser things."""
 
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
 import os
+try:
+    from urllib.parse import quote
+except ImportError:
+    # PY2 Compat
+    from urllib import quote
 
 import requests
+from jinja2 import ChoiceLoader, FunctionLoader
 
 from tornado import ioloop
 from tornado.web import HTTPError
 
-from IPython.utils.traitlets import Unicode
 
-from IPython.html.notebookapp import NotebookApp
+from IPython.utils.traitlets import (
+    Integer,
+    Unicode,
+    CUnicode,
+)
+
+from IPython.html.notebookapp import NotebookApp, aliases as notebook_aliases
 from IPython.html.auth.login import LoginHandler
 from IPython.html.auth.logout import LogoutHandler
 
@@ -45,14 +56,13 @@ class JupyterHubLoginHandler(LoginHandler):
         hub_api_url = self.settings['hub_api_url']
         hub_api_key = self.settings['hub_api_key']
         r = requests.get(url_path_join(
-            hub_api_url, "authorizations/cookie", cookie_name,
+            hub_api_url, "authorizations/cookie", cookie_name, quote(encrypted_cookie, safe=''),
         ),
             headers = {'Authorization' : 'token %s' % hub_api_key},
-            data=encrypted_cookie,
         )
         if r.status_code == 404:
-            data = {'user' : ''}
-        if r.status_code == 403:
+            data = None
+        elif r.status_code == 403:
             self.log.error("I don't have permission to verify cookies, my auth token may have expired: [%i] %s", r.status_code, r.reason)
             raise HTTPError(500, "Permission failure checking authorization, I may need to be restarted")
         elif r.status_code >= 500:
@@ -83,7 +93,7 @@ class JupyterHubLoginHandler(LoginHandler):
             if not auth_data:
                 # treat invalid token the same as no token
                 return None
-            user = auth_data['user']
+            user = auth_data['name']
             if user == my_user:
                 self._cached_user = user
                 return user
@@ -100,7 +110,7 @@ class JupyterHubLogoutHandler(LogoutHandler):
 
 
 # register new hub related command-line aliases
-aliases = NotebookApp.aliases.get_default_value()
+aliases = dict(notebook_aliases)
 aliases.update({
     'user' : 'SingleUserNotebookApp.user',
     'cookie-name': 'SingleUserNotebookApp.cookie_name',
@@ -109,9 +119,23 @@ aliases.update({
     'base-url': 'SingleUserNotebookApp.base_url',
 })
 
+page_template = """
+{% extends "templates/page.html" %}
+
+{% block header_buttons %}
+{{super()}}
+
+<a href='{{hub_control_panel_url}}'
+ class='btn btn-default btn-sm navbar-btn pull-right'
+ style='margin-right: 4px; margin-left: 2px;'
+>
+Control Panel</a>
+{% endblock %}
+"""
+
 class SingleUserNotebookApp(NotebookApp):
     """A Subclass of the regular NotebookApp that is aware of the parent multiuser context."""
-    user = Unicode(config=True)
+    user = CUnicode(config=True)
     def _user_changed(self, name, old, new):
         self.log.name = new
     cookie_name = Unicode(config=True)
@@ -119,9 +143,20 @@ class SingleUserNotebookApp(NotebookApp):
     hub_api_url = Unicode(config=True)
     aliases = aliases
     open_browser = False
+    trust_xheaders = True
     login_handler_class = JupyterHubLoginHandler
     logout_handler_class = JupyterHubLogoutHandler
-    
+
+    cookie_cache_lifetime = Integer(
+        config=True,
+        default_value=300,
+        allow_none=True,
+        help="""
+        Time, in seconds, that we cache a validated cookie before requiring
+        revalidation with the hub.
+        """,
+    )
+
     def _log_datefmt_default(self):
         """Exclude date from default date format"""
         return "%Y-%m-%d %H:%M:%S"
@@ -133,6 +168,21 @@ class SingleUserNotebookApp(NotebookApp):
     def _confirm_exit(self):
         # disable the exit confirmation for background notebook processes
         ioloop.IOLoop.instance().stop()
+
+    def _clear_cookie_cache(self):
+        self.log.debug("Clearing cookie cache")
+        self.tornado_settings['cookie_cache'].clear()
+    
+    def start(self):
+        # Start a PeriodicCallback to clear cached cookies.  This forces us to
+        # revalidate our user with the Hub at least every
+        # `cookie_cache_lifetime` seconds.
+        if self.cookie_cache_lifetime:
+            ioloop.PeriodicCallback(
+                self._clear_cookie_cache,
+                self.cookie_cache_lifetime * 1e3,
+            ).start()
+        super(SingleUserNotebookApp, self).start()
     
     def init_webapp(self):
         # load the hub related settings into the tornado settings dict
@@ -143,9 +193,30 @@ class SingleUserNotebookApp(NotebookApp):
         s['hub_api_key'] = env.pop('JPY_API_TOKEN')
         s['hub_prefix'] = self.hub_prefix
         s['cookie_name'] = self.cookie_name
-        s['login_url'] = url_path_join(self.hub_prefix, 'login')
+        s['login_url'] = self.hub_prefix
         s['hub_api_url'] = self.hub_api_url
+        s['csp_report_uri'] = url_path_join(self.hub_prefix, 'security/csp-report')
+        
         super(SingleUserNotebookApp, self).init_webapp()
+        self.patch_templates()
+    
+    def patch_templates(self):
+        """Patch page templates to add Hub-related buttons"""
+        env = self.web_app.settings['jinja2_env']
+        
+        env.globals['hub_control_panel_url'] = \
+            url_path_join(self.hub_prefix, 'home')
+        
+        # patch jinja env loading to modify page template
+        def get_page(name):
+            if name == 'page.html':
+                return page_template
+        
+        orig_loader = env.loader
+        env.loader = ChoiceLoader([
+            FunctionLoader(get_page),
+            orig_loader,
+        ])
 
 
 def main():

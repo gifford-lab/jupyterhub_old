@@ -1,5 +1,9 @@
 # JupyterHub: A multi-user server for Jupyter notebooks
 
+Questions, comments? Visit our Google Group:
+
+[![Google Group](https://img.shields.io/badge/-Google%20Group-lightgrey.svg)](https://groups.google.com/forum/#!forum/jupyter)
+
 JupyterHub is a multi-user server that manages and proxies multiple instances of the single-user <del>IPython</del> Jupyter notebook server.
 
 Three actors:
@@ -31,18 +35,30 @@ Then install javascript dependencies:
 
     sudo npm install -g configurable-http-proxy
 
+### Optional
+
+- Notes on `pip` command used in the below installation sections:
+  - `sudo` may be needed for `pip install`, depending on filesystem permissions.
+  - JupyterHub requires Python >= 3.3, so it may be required on some machines to use `pip3` instead
+    of `pip` (especially when you have both Python 2 and Python 3 installed on your machine).
+    If `pip3` is not found on your machine, you can get it by doing:
+
+        sudo apt-get install python3-pip
+
 
 ## Installation
 
-Then you can install the Python package by doing:
+JupyterHub can be installed with pip:
 
-    pip install -r requirements.txt
-    pip install .
+    pip3 install jupyterhub
+
+If the `pip3 install .` command fails and complains about `lessc` being unavailable, you may need to explicitly install some additional javascript dependencies:
+
+    npm install
 
 If you plan to run notebook servers locally, you may also need to install the IPython notebook:
 
-    pip install "ipython[notebook]"
-
+    pip3 install "ipython[notebook]"
 
 This will fetch client-side javascript dependencies and compile CSS,
 and install these files to `sys.prefix`/share/jupyter, as well as
@@ -51,15 +67,16 @@ install any Python dependencies.
 
 ### Development install
 
-For a development install:
+For a development install, clone the repository and then install from source:
 
-    pip install -r dev-requirements.txt
-    pip install -e .
+    git clone https://github.com/jupyter/jupyterhub
+    cd jupyterhub
+    pip3 install -r dev-requirements.txt -e .
 
 In which case you may need to manually update javascript and css after some updates, with:
 
-    python setup.py js    # fetch updated client-side js (changes rarely)
-    python setup.py css   # recompile CSS from LESS sources
+    python3 setup.py js    # fetch updated client-side js (changes rarely)
+    python3 setup.py css   # recompile CSS from LESS sources
 
 
 ## Running the server
@@ -74,6 +91,10 @@ If you want multiple users to be able to sign into the server, you will need to 
 `jupyterhub` command as a privileged user, such as root.
 The [wiki](https://github.com/jupyter/jupyterhub/wiki/Using-sudo-to-run-JupyterHub-without-root-privileges) describes how to run the server
 as a less privileged user, which requires more configuration of the system.
+
+## Getting started
+
+see the [getting started doc](docs/getting-started.md) for some of the basics of configuring your JupyterHub deployment.
 
 ### Some examples
 
@@ -91,3 +112,13 @@ Some examples, meant as illustration and testing of this concept:
 
 - Using GitHub OAuth instead of PAM with [OAuthenticator](https://github.com/jupyter/oauthenticator)
 - Spawning single-user servers with docker, using the [DockerSpawner](https://github.com/jupyter/dockerspawner)
+
+# Getting help
+
+We encourage you to ask questions on the mailing list:
+
+[![Google Group](https://img.shields.io/badge/-Google%20Group-lightgrey.svg)](https://groups.google.com/forum/#!forum/jupyter)
+
+but you can participate in development discussions or get live help on Gitter:
+
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/jupyter/jupyterhub?utm_source=badge&utm_medium=badge)

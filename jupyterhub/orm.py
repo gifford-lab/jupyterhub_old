@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import errno
 import json
 import socket
+from urllib.parse import quote
 
 from tornado import gen
 from tornado.log import app_log
@@ -75,18 +76,33 @@ class Server(Base):
     
     @property
     def host(self):
+        ip = self.ip
+        if ip in {'', '0.0.0.0'}:
+            # when listening on all interfaces, connect to localhost
+            ip = 'localhost'
         return "{proto}://{ip}:{port}".format(
             proto=self.proto,
-            ip=self.ip or 'localhost',
+            ip=ip,
             port=self.port,
         )
-    
+
     @property
     def url(self):
         return "{host}{uri}".format(
             host=self.host,
             uri=self.base_url,
         )
+    
+    @property
+    def bind_url(self):
+        """representation of URL used for binding
+        
+        Never used in APIs, only logging,
+        since it can be non-connectable value, such as '', meaning all interfaces.
+        """
+        if self.ip in {'', '0.0.0.0'}:
+            return self.url.replace('localhost', self.ip or '*', 1)
+        return self.url
     
     @gen.coroutine
     def wait_up(self, timeout=10, http=False):
@@ -130,7 +146,7 @@ class Proxy(Base):
             )
         else:
             return "<%s [unconfigured]>" % self.__class__.__name__
-
+    
     def api_request(self, path, method='GET', body=None, client=None):
         """Make an authenticated API request of the proxy"""
         client = client or AsyncHTTPClient()
@@ -269,6 +285,8 @@ class User(Base):
     spawner = None
     spawn_pending = False
     stop_pending = False
+
+    other_user_cookies = set([])
     
     def __repr__(self):
         if self.server:
@@ -283,6 +301,11 @@ class User(Base):
                 cls=self.__class__.__name__,
                 name=self.name,
             )
+    
+    @property
+    def escaped_name(self):
+        """My name, escaped for use in URLs, cookies, etc."""
+        return quote(self.name, safe='@')
     
     @property
     def running(self):
@@ -318,9 +341,10 @@ class User(Base):
         db = inspect(self).session
         if hub is None:
             hub = db.query(Hub).first()
+        
         self.server = Server(
-            cookie_name='%s-%s' % (hub.server.cookie_name, self.name),
-            base_url=url_path_join(base_url, 'user', self.name),
+            cookie_name='%s-%s' % (hub.server.cookie_name, quote(self.name, safe='')),
+            base_url=url_path_join(base_url, 'user', self.escaped_name),
         )
         db.add(self.server)
         db.commit()
@@ -348,10 +372,12 @@ class User(Base):
                 self.log.warn("{user}'s server failed to start in {s} seconds, giving up".format(
                     user=self.name, s=spawner.start_timeout,
                 ))
+                e.reason = 'timeout'
             else:
                 self.log.error("Unhandled error starting {user}'s server: {error}".format(
                     user=self.name, error=e,
                 ))
+                e.reason = 'error'
             try:
                 yield self.stop()
             except Exception:
@@ -378,7 +404,9 @@ class User(Base):
                         http_timeout=spawner.http_timeout,
                     )
                 )
+                e.reason = 'timeout'
             else:
+                e.reason = 'error'
                 self.log.error("Unhandled error waiting for {user}'s server to show up at {url}: {error}".format(
                     user=self.name, url=self.server.url, error=e,
                 ))
@@ -410,7 +438,6 @@ class User(Base):
                 yield self.spawner.stop()
             self.spawner.clear_state()
             self.state = self.spawner.get_state()
-            self.last_activity = datetime.utcnow()
             self.server = None
             inspect(self).session.commit()
         finally:

@@ -8,26 +8,33 @@ from tornado import web
 from .. import orm
 from ..utils import admin_only, url_path_join
 from .base import BaseHandler
+from .login import LoginHandler
 
 
 class RootHandler(BaseHandler):
     """Render the Hub root page.
     
-    Currently redirects to home if logged in,
-    shows big fat login button otherwise.
+    If logged in, redirects to:
+    
+    - single-user server if running
+    - hub home, otherwise
+    
+    Otherwise, renders login page.
     """
     def get(self):
-        if self.get_current_user():
-            self.redirect(
-                url_path_join(self.hub.server.base_url, 'home'),
-                permanent=False,
-            )
+        user = self.get_current_user()
+        if user:
+            if user.running:
+                url = user.server.base_url
+                self.log.debug("User is running: %s", url)
+            else:
+                url = url_path_join(self.hub.server.base_url, 'home')
+                self.log.debug("User is not running: %s", url)
+            self.redirect(url)
             return
-        
-        html = self.render_template('index.html',
-            login_url=self.settings['login_url'],
-        )
-        self.finish(html)
+        url = url_path_join(self.hub.server.base_url, 'login')
+        self.redirect(url)
+
 
 class HomeHandler(BaseHandler):
     """Render the user's home page."""

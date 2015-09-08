@@ -4,13 +4,15 @@
 # Distributed under the terms of the Modified BSD License.
 
 import pwd, os, grp
+from grp import getgrnam
+import pwd
 from subprocess import check_call, check_output, CalledProcessError
 
 from tornado import gen
 import simplepam
 
-from IPython.config import LoggingConfigurable
-from IPython.utils.traitlets import Bool, Set, Unicode, Any
+from traitlets.config import LoggingConfigurable
+from traitlets import Bool, Set, Unicode, Any
 
 from .handlers.login import LoginHandler
 from .handlers.base import BaseHandler
@@ -23,6 +25,12 @@ class Authenticator(LoggingConfigurable):
     """
     
     db = Any()
+    admin_users = Set(config=True,
+        help="""set of usernames of admin users
+
+        If unspecified, only the user that launches the server will be admin.
+        """
+    )
     whitelist = Set(config=True,
         help="""Username whitelist.
         
@@ -30,7 +38,18 @@ class Authenticator(LoggingConfigurable):
         If empty, allow any user to attempt login.
         """
     )
-    custom_html = Unicode('')
+    custom_html = Unicode('',
+        help="""HTML login form for custom handlers.
+        Override in form-based custom authenticators
+        that don't use username+password,
+        or need custom branding.
+        """
+    )
+    login_service = Unicode('',
+        help="""Name of the login service for external
+        login services (e.g. 'GitHub').
+        """
+    )
     
     @gen.coroutine
     def authenticate(self, handler, data):
@@ -40,7 +59,14 @@ class Authenticator(LoggingConfigurable):
         It must return the username on successful authentication,
         and return None on failed authentication.
         """
-    
+
+    def check_whitelist(self, user):
+        """
+        Return True if the whitelist is empty or user is in the whitelist.
+        """
+        # Parens aren't necessary here, but they make this easier to parse.
+        return (not self.whitelist) or (user in self.whitelist)
+
     def add_user(self, user):
         """Add a new user
         
@@ -57,8 +83,7 @@ class Authenticator(LoggingConfigurable):
         
         Removes the user from the whitelist.
         """
-        if user.name in self.whitelist:
-            self.whitelist.remove(user.name)
+        self.whitelist.discard(user.name)
     
     def login_url(self, base_url):
         """Override to register a custom login handler"""
@@ -88,7 +113,37 @@ class LocalAuthenticator(Authenticator):
         should I try to create the system user?
         """
     )
-    
+
+    group_whitelist = Set(
+        config=True,
+        help="Automatically whitelist anyone in this group.",
+    )
+
+    def _group_whitelist_changed(self, name, old, new):
+        if self.whitelist:
+            self.log.warn(
+                "Ignoring username whitelist because group whitelist supplied!"
+            )
+
+    def check_whitelist(self, username):
+        if self.group_whitelist:
+            return self.check_group_whitelist(username)
+        else:
+            return super().check_whitelist(username)
+
+    def check_group_whitelist(self, username):
+        if not self.group_whitelist:
+            return False
+        for grnam in self.group_whitelist:
+            try:
+                group = getgrnam(grnam)
+            except KeyError:
+                self.log.error('No such group: [%s]' % grnam)
+                continue
+            if username in group.gr_mem:
+                return True
+        return False
+
     @gen.coroutine
     def add_user(self, user):
         """Add a new user
@@ -186,7 +241,7 @@ class PAMAuthenticator(LocalAuthenticator):
         Return None otherwise.
         """
         username = data['username']
-        if self.whitelist and username not in self.whitelist:
+        if not self.check_whitelist(username):
             return
         # simplepam wants bytes, not unicode
         # see simplepam#3

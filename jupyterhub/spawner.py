@@ -10,17 +10,19 @@ import pwd, grp
 import re
 import signal
 import sys
+import grp
 from subprocess import Popen, check_output, PIPE, CalledProcessError
 from tempfile import TemporaryDirectory
 
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 
-from IPython.config import LoggingConfigurable
-from IPython.utils.traitlets import (
+from traitlets.config import LoggingConfigurable
+from traitlets import (
     Any, Bool, Dict, Enum, Instance, Integer, Float, List, Unicode,
 )
 
+from .traitlets import Command
 from .utils import random_port
 
 NUM_PAT = re.compile(r'\d+')
@@ -54,7 +56,7 @@ class Spawner(LoggingConfigurable):
     )
 
     http_timeout = Integer(
-        10, config=True,
+        30, config=True,
         help="""Timeout (in seconds) before giving up on a spawned HTTP server
 
         Once a server has successfully been spawned, this is the amount of time
@@ -93,7 +95,7 @@ class Spawner(LoggingConfigurable):
         env['JPY_API_TOKEN'] = self.api_token
         return env
     
-    cmd = List(Unicode, default_value=['jupyterhub-singleuser'], config=True,
+    cmd = Command(['jupyterhub-singleuser'], config=True,
         help="""The command used for starting notebooks."""
     )
     args = List(Unicode, config=True,
@@ -277,6 +279,7 @@ def set_user_setuid(username):
     home = user.pw_dir
     if home.startswith("/afs/"):
         home = "/cluster/" + username
+    gids = [ g.gr_gid for g in grp.getgrall() if username in g.gr_mem ]
     
     def preexec():
         # don't forward signals
@@ -284,6 +287,10 @@ def set_user_setuid(username):
         
         # set the user and group
         os.setgid(gid)
+        try:
+            os.setgroups(gids)
+        except Exception as e:
+            print('Failed to set groups %s' % e, file=sys.stderr)
         os.setuid(uid)
 
         # start in the user's home dir
@@ -305,7 +312,7 @@ class LocalProcessSpawner(Spawner):
         help="Seconds to wait for process to halt after SIGKILL before giving up"
     )
     
-    proc = Instance(Popen)
+    proc = Instance(Popen, allow_none=True)
     pid = Integer(0)
     
     def make_preexec_fn(self, name):
@@ -330,10 +337,18 @@ class LocalProcessSpawner(Spawner):
         self.pid = 0
     
     def user_env(self, env):
-        env['USER'] = self.user.name
-        env['HOME'] = pwd.getpwnam(self.user.name).pw_dir
+        home = pwd.getpwnam(self.user.name).pw_dir
+        shell = pwd.getpwnam(self.user.name).pw_shell
+        # These will be empty if undefined,
+        # in which case don't set the env:
+        if home:
+            env['HOME'] = home
+        if shell:
+            env['SHELL'] = shell
+
         if env['HOME'].startswith("/afs/"):
             env['HOME'] = "/cluster/" + self.user.name
+
         return env
     
     def _env_default(self):
