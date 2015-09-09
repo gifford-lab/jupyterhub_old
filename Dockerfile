@@ -12,6 +12,7 @@ RUN apt-get install -y octave octave-data-smoothing octave-dataframe octave-econ
 RUN apt-get install -y vim emacs24-nox
 
 # Get the latest Python packages for python2 and python3 (conda would be better for this).
+RUN pip install --upgrade pip
 RUN pip install --upgrade numpy
 RUN pip install --upgrade scipy # slow
 RUN pip install --upgrade pymc
@@ -20,6 +21,7 @@ RUN pip install git+https://github.com/pymc-devs/pymc
 RUN pip install --upgrade statsmodels
 RUN pip install terminado
 
+RUN pip3 install --upgrade pip
 RUN pip3 install --upgrade numpy
 RUN pip3 install --upgrade scipy # slow
 RUN pip3 install --upgrade pymc
