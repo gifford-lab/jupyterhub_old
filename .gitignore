@@ -6,7 +6,7 @@ build
 dist
 # ignore config file at the top-level of the repo
 # but not sub-dirs
-/jupyterhub_config.py
+# /jupyterhub_config.py
 jupyterhub_cookie_secret
 jupyterhub.sqlite
 share/jupyter/hub/static/components

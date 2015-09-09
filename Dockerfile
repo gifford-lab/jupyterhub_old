@@ -1,11 +1,8 @@
-# A base docker image that includes juptyerhub and IPython master
-#
-# Build your own derivative images starting with
-#
 FROM ipython/scipystack
 
 MAINTAINER Matt Edwards <matted@mit.edu>
 
+# Prepare basic system:
 RUN apt-get update
 RUN apt-get install -y r-base r-cran-ggplot2 r-recommended python-rpy2 python2.7-rpy2 python-rpy python2.7-rpy
 
@@ -14,42 +11,31 @@ RUN apt-get install -y python-tz python3-tz python2.7-pyparsing python-pyparsing
 
 RUN apt-get install -y octave octave-data-smoothing octave-dataframe octave-econometrics octave-financial octave-financial octave-ga octave-gsl octave-image octave-linear-algebra octave-miscellaneous octave-nan octave-nlopt octave-nnet octave-odepkg octave-optim octave-signal octave-sockets octave-specfun octave-statistics octave-strings octave-symbolic octave-tsa
 
+RUN apt-get install -y vim emacs24-nox
+
+# Get the latest Python packages for python2 and python3 (conda would be better for this).
 RUN pip install --upgrade numpy
-RUN pip install --upgrade scipy
+### RUN pip install --upgrade scipy # slowwwww
 RUN pip install --upgrade pymc
 RUN pip install --upgrade scikit-learn
-RUN pip install git+https://github.com/njsmith/scikits-sparse.git
 RUN pip install git+https://github.com/pymc-devs/pymc
-RUN pip install --upgrade git+https://github.com/Theano/Theano.git
 RUN pip install --upgrade statsmodels
-RUN pip install --upgrade rpy2
 RUN pip install terminado
 
 RUN pip3 install --upgrade numpy
-RUN pip3 install --upgrade scipy
-RUN pip3 install --upgrade pymc # not on apt
+### RUN pip3 install --upgrade scipy # slowwwww
+RUN pip3 install --upgrade pymc
 RUN pip3 install --upgrade scikit-learn
-RUN pip3 install git+https://github.com/njsmith/scikits-sparse.git
 RUN pip3 install git+https://github.com/pymc-devs/pymc
-RUN pip3 install --upgrade git+https://github.com/Theano/Theano.git
 RUN pip3 install --upgrade statsmodels
-RUN pip3 install --upgrade rpy2
 RUN pip3 install terminado
 
-RUN R -e 'source("http://bioconductor.org/biocLite.R"); biocLite("edgeR"); biocLite("DESeq2"); biocLite("DESeq");'
+# Hacky access control for the image:
+RUN echo "matted ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN echo "thashim ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-RUN mkdir -p /srv/
+# New Julia and R installation (from https://github.com/jupyter/docker-demo-images/blob/master/Dockerfile), mixed with old approach:
 
-# install jupyterhub
-ADD requirements.txt /tmp/requirements.txt
-RUN pip3 install -r /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
-
-# Get R and other kernels, from jupyter/docker-demo-images.
-
-RUN apt-get install -y vim emacs24-nox
-
-# Julia and R Installation
 RUN apt-get install software-properties-common python-software-properties -y && \
     add-apt-repository "deb http://cran.rstudio.com/bin/linux/ubuntu trusty/" && \
     gpg --keyserver keyserver.ubuntu.com --recv-key E084DAB9 && \
@@ -59,29 +45,30 @@ RUN apt-get install software-properties-common python-software-properties -y && 
     apt-get update && \
     apt-get install julia -y && \
     apt-get install libnettle4 && \
-    apt-get install -y r-base r-base-dev r-cran-rcurl libreadline-dev && \
-    pip2 install rpy2 && pip3 install rpy2
+    apt-get install -y libxrender1 fonts-dejavu gfortran gcc libzmq3-dev libzmq3 libxml2-dev && \
+    apt-get install -y r-base r-base-dev r-cran-rcurl libreadline-dev
 
-# IJulia installation
-# RUN julia -e 'Pkg.add("IJulia")'
-# Julia packages
-# RUN julia -e 'Pkg.add("Gadfly")' && julia -e 'Pkg.add("RDatasets")'
+RUN julia -e 'Pkg.add("IJulia")'
+RUN julia -e 'Pkg.add("Gadfly")' && julia -e 'Pkg.add("RDatasets")'
 
-# R installation
 RUN echo 'options(repos=structure(c(CRAN="http://cran.rstudio.com")))' >> /etc/R/Rprofile.site
 RUN echo "PKG_CXXFLAGS = '-std=c++11'" >> /etc/R/Makeconf
+
+# Extra R packages:		     
+RUN R -e 'source("http://bioconductor.org/biocLite.R"); biocLite("edgeR"); biocLite("DESeq2"); biocLite("DESeq");'
 RUN echo "install.packages(c('ggplot2', 'XML', 'plyr', 'randomForest', 'Hmisc', 'stringr', 'RColorBrewer', 'reshape', 'reshape2'))" | R --no-save
 RUN echo "install.packages(c('RCurl', 'devtools', 'dplyr'))" | R --no-save
 RUN echo "install.packages(c('httr', 'knitr', 'packrat'))" | R --no-save
 RUN echo "install.packages(c('rmarkdown', 'rvtest', 'testit', 'testthat', 'tidyr', 'shiny'))" | R --no-save
-RUN echo "library(devtools); install_github('armstrtw/rzmq'); install_github('takluyver/IRdisplay'); install_github('takluyver/IRkernel'); IRkernel::installspec()" | R --no-save
-RUN echo "library(devtools); install_github('hadley/lineprof')" | R --no-save
-RUN echo "library(devtools); install_github('rstudio/rticles')" | R --no-save
-RUN echo "library(devtools); install_github('jimhester/covr')" | R --no-save
-
 RUN echo "install.packages(c('base64enc', 'Cairo', 'codetools', 'data.table', 'gridExtra', 'gtable', 'hexbin', 'jpeg', 'Lahman', 'lattice'))" | R --no-save
 RUN echo "install.packages(c('MASS', 'PKI', 'png', 'microbenchmark', 'mgcv', 'mapproj', 'maps', 'maptools', 'mgcv', 'multcomp', 'nlme'))" | R --no-save
 RUN echo "install.packages(c('nycflights13', 'quantreg', 'rJava', 'roxygen2', 'RSQLite', 'XML'))" | R --no-save
+
+# Install jupyterhub:
+RUN mkdir -p /srv/
+ADD requirements.txt /tmp/requirements.txt
+RUN pip3 install -r /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
 
 ADD configurable-http-proxy /tmp/configurable-http-proxy
 WORKDIR /tmp/configurable-http-proxy
@@ -93,26 +80,19 @@ WORKDIR /srv/jupyterhub/
 
 RUN pip3 install .
 
-RUN pip install git+https://github.com/Calysto/octave_kernel.git
-RUN npm install -g ijavascript
-RUN pip install git+https://github.com/takluyver/bash_kernel.git
+# R kernel installation from http://irkernel.github.io/installation/:
+RUN R -e 'install.packages(c("rzmq", "repr", "IRkernel", "IRdisplay"), repos = c("http://irkernel.github.io/", getOption("repos"))); IRkernel::installspec(user = FALSE);'
 
-# Copy kernels we just activated to the system-level location.
-# RUN chmod -R a+rwx /root/.julia
-RUN python2 -m IPython kernelspec install-self
-RUN python3 -m IPython kernelspec install-self
-RUN chmod -R a+r /root/.ipython
-RUN cp -r /root/.ipython/kernels/* /usr/local/share/jupyter/kernels/
-
-# Hacky...
-RUN echo "matted ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-RUN echo "thashim ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+# Install some extra kernels:
+RUN pip3 install git+https://github.com/Calysto/octave_kernel.git
+# RUN npm install -g ijavascript # Doesn't seem to work.
+RUN pip2 install bash_kernel
+RUN pip3 install bash_kernel
+RUN python2 -m bash_kernel.install
+RUN python3 -m bash_kernel.install
 
 WORKDIR /srv/jupyterhub/
 
 EXPOSE 8000
 
-# VOLUME /notebooks
-
-# ONBUILD ADD jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
 ENTRYPOINT ["jupyterhub", "-f", "/srv/jupyterhub/jupyterhub_config.py"]
