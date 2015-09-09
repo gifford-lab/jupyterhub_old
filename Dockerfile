@@ -1,13 +1,11 @@
+# FROM jupyter/notebook # this leads to dead notebooks? I don't understand.
 FROM ipython/scipystack
 
 MAINTAINER Matt Edwards <matted@mit.edu>
 
 # Prepare basic system:
 RUN apt-get update
-RUN apt-get install -y r-base r-cran-ggplot2 r-recommended python-rpy2 python2.7-rpy2 python-rpy python2.7-rpy
-
-RUN apt-get install -y libsuitesparse-dev python-statsmodels python2.7-statsmodels python-pymc
-RUN apt-get install -y python-tz python3-tz python2.7-pyparsing python-pyparsing python3-pyparsing
+RUN apt-get install -y python-tz python3-tz python2.7-pyparsing python-pyparsing python3-pyparsing libxrender1 fonts-dejavu gfortran gcc libzmq3-dev libzmq3 libxml2-dev libopenblas-dev liblapack-dev
 
 RUN apt-get install -y octave octave-data-smoothing octave-dataframe octave-econometrics octave-financial octave-financial octave-ga octave-gsl octave-image octave-linear-algebra octave-miscellaneous octave-nan octave-nlopt octave-nnet octave-odepkg octave-optim octave-signal octave-sockets octave-specfun octave-statistics octave-strings octave-symbolic octave-tsa
 
@@ -15,7 +13,7 @@ RUN apt-get install -y vim emacs24-nox
 
 # Get the latest Python packages for python2 and python3 (conda would be better for this).
 RUN pip install --upgrade numpy
-### RUN pip install --upgrade scipy # slowwwww
+RUN pip install --upgrade scipy # slow
 RUN pip install --upgrade pymc
 RUN pip install --upgrade scikit-learn
 RUN pip install git+https://github.com/pymc-devs/pymc
@@ -23,7 +21,7 @@ RUN pip install --upgrade statsmodels
 RUN pip install terminado
 
 RUN pip3 install --upgrade numpy
-### RUN pip3 install --upgrade scipy # slowwwww
+RUN pip3 install --upgrade scipy # slow
 RUN pip3 install --upgrade pymc
 RUN pip3 install --upgrade scikit-learn
 RUN pip3 install git+https://github.com/pymc-devs/pymc
@@ -43,13 +41,13 @@ RUN apt-get install software-properties-common python-software-properties -y && 
     add-apt-repository ppa:staticfloat/juliareleases && \
     add-apt-repository ppa:staticfloat/julia-deps && \
     apt-get update && \
-    apt-get install julia -y && \
-    apt-get install libnettle4 && \
-    apt-get install -y libxrender1 fonts-dejavu gfortran gcc libzmq3-dev libzmq3 libxml2-dev && \
-    apt-get install -y r-base r-base-dev r-cran-rcurl libreadline-dev
+    apt-get install -y julia libnettle4 && \
+    apt-get install -y r-base r-base-dev r-cran-rcurl libreadline-dev r-recommended r-cran-ggplot2 && \
+    pip install rpy2 && pip3 install rpy2
 
 RUN julia -e 'Pkg.add("IJulia")'
 RUN julia -e 'Pkg.add("Gadfly")' && julia -e 'Pkg.add("RDatasets")'
+RUN julia -e 'Pkg.update()'
 
 RUN echo 'options(repos=structure(c(CRAN="http://cran.rstudio.com")))' >> /etc/R/Rprofile.site
 RUN echo "PKG_CXXFLAGS = '-std=c++11'" >> /etc/R/Makeconf
