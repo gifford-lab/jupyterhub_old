@@ -32,7 +32,7 @@ class RootHandler(BaseHandler):
                 self.log.debug("User is not running: %s", url)
             self.redirect(url)
             return
-        url = url_path_join(self.hub.server.base_url, 'login')
+        url = self.authenticator.login_url(self.hub.server.base_url)
         self.redirect(url)
 
 
