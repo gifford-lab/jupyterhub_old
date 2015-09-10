@@ -72,6 +72,7 @@ RUN echo "install.packages(c('rmarkdown', 'rvtest', 'testit', 'testthat', 'tidyr
 RUN echo "install.packages(c('base64enc', 'Cairo', 'codetools', 'data.table', 'gridExtra', 'gtable', 'hexbin', 'jpeg', 'Lahman', 'lattice'))" | R --no-save
 RUN echo "install.packages(c('MASS', 'PKI', 'png', 'microbenchmark', 'mgcv', 'mapproj', 'maps', 'maptools', 'mgcv', 'multcomp', 'nlme'))" | R --no-save
 RUN echo "install.packages(c('nycflights13', 'quantreg', 'rJava', 'roxygen2', 'RSQLite', 'XML'))" | R --no-save
+RUN R -e 'install.packages(c("rzmq", "repr"), repos = c("http://irkernel.github.io/", getOption("repos")));'
 
 # Install jupyterhub:
 RUN mkdir -p /srv/
@@ -90,7 +91,7 @@ WORKDIR /srv/jupyterhub/
 RUN pip3 install .
 
 # R kernel installation from http://irkernel.github.io/installation/:
-RUN R -e 'install.packages(c("rzmq", "repr", "IRkernel", "IRdisplay"), repos = c("http://irkernel.github.io/", getOption("repos"))); IRkernel::installspec(user = FALSE);'
+RUN R -e 'install.packages(c("IRkernel", "IRdisplay"), repos = c("http://irkernel.github.io/", getOption("repos"))); IRkernel::installspec(user = FALSE);'
 
 # Install some extra kernels:
 RUN pip3 install git+https://github.com/Calysto/octave_kernel.git
