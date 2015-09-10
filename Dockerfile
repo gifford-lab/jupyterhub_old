@@ -1,41 +1,50 @@
-# FROM jupyter/notebook # this leads to dead notebooks? I don't understand.
+# FROM jupyter/notebook # This leads to dead kernels, which I don't understand.
 FROM ipython/scipystack
 
 MAINTAINER Matt Edwards <matted@mit.edu>
 
 # Prepare basic system:
 RUN apt-get update
-RUN apt-get install -y python-tz python3-tz python2.7-pyparsing python-pyparsing python3-pyparsing libxrender1 fonts-dejavu gfortran gcc libzmq3-dev libzmq3 libxml2-dev libopenblas-dev liblapack-dev
+RUN apt-get install -y python-tz python3-tz python2.7-pyparsing \
+python-pyparsing python3-pyparsing libxrender1 fonts-dejavu gfortran \
+gcc libzmq3-dev libzmq3 libxml2-dev libopenblas-dev liblapack-dev
 
-RUN apt-get install -y octave octave-data-smoothing octave-dataframe octave-econometrics octave-financial octave-financial octave-ga octave-gsl octave-image octave-linear-algebra octave-miscellaneous octave-nan octave-nlopt octave-nnet octave-odepkg octave-optim octave-signal octave-sockets octave-specfun octave-statistics octave-strings octave-symbolic octave-tsa
+RUN apt-get install -y octave octave-data-smoothing octave-dataframe \
+octave-econometrics octave-financial octave-financial octave-ga \
+octave-gsl octave-image octave-linear-algebra octave-miscellaneous \
+octave-nan octave-nlopt octave-nnet octave-odepkg octave-optim \
+octave-signal octave-sockets octave-specfun octave-statistics \
+octave-strings octave-symbolic octave-tsa
+
+# Hacky access control for the image:
+RUN echo "matted ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN echo "thashim ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 RUN apt-get install -y vim emacs24-nox
 
-# Get the latest Python packages for python2 and python3 (conda would be better for this).
-RUN pip install --upgrade pip
-RUN pip install --upgrade numpy
-RUN pip install --upgrade scipy # slow
-RUN pip install --upgrade pymc
-RUN pip install --upgrade scikit-learn
-RUN pip install git+https://github.com/pymc-devs/pymc
-RUN pip install --upgrade statsmodels
-RUN pip install terminado
+# Get the latest Python packages for python2 and python3.
+# Conda would be better, but I can't make it work correctly.
+RUN pip2 install --upgrade pip
+RUN pip2 install --upgrade numpy
+RUN pip2 install --upgrade scipy
+RUN pip2 install --upgrade pymc
+RUN pip2 install --upgrade scikit-learn
+RUN pip2 install git+https://github.com/pymc-devs/pymc
+RUN pip2 install --upgrade statsmodels
+RUN pip2 install terminado
 
 RUN pip3 install --upgrade pip
 RUN pip3 install --upgrade numpy
-RUN pip3 install --upgrade scipy # slow
+RUN pip3 install --upgrade scipy
 RUN pip3 install --upgrade pymc
 RUN pip3 install --upgrade scikit-learn
 RUN pip3 install git+https://github.com/pymc-devs/pymc
 RUN pip3 install --upgrade statsmodels
 RUN pip3 install terminado
 
-# Hacky access control for the image:
-RUN echo "matted ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-RUN echo "thashim ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-
-# New Julia and R installation (from https://github.com/jupyter/docker-demo-images/blob/master/Dockerfile), mixed with old approach:
-
+# New Julia and R installation (from
+# https://github.com/jupyter/docker-demo-images/blob/master/Dockerfile),
+# mixed with old approach that gets more recent versions from PPAs.
 RUN apt-get install software-properties-common python-software-properties -y && \
     add-apt-repository "deb http://cran.rstudio.com/bin/linux/ubuntu trusty/" && \
     gpg --keyserver keyserver.ubuntu.com --recv-key E084DAB9 && \
@@ -45,7 +54,7 @@ RUN apt-get install software-properties-common python-software-properties -y && 
     apt-get update && \
     apt-get install -y julia libnettle4 && \
     apt-get install -y r-base r-base-dev r-cran-rcurl libreadline-dev r-recommended r-cran-ggplot2 && \
-    pip install rpy2 && pip3 install rpy2
+    pip2 install rpy2 && pip3 install rpy2
 
 RUN julia -e 'Pkg.add("IJulia")'
 RUN julia -e 'Pkg.add("Gadfly")' && julia -e 'Pkg.add("RDatasets")'
@@ -67,8 +76,8 @@ RUN echo "install.packages(c('nycflights13', 'quantreg', 'rJava', 'roxygen2', 'R
 # Install jupyterhub:
 RUN mkdir -p /srv/
 ADD requirements.txt /tmp/requirements.txt
+RUN pip2 install -r /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
 
 ADD configurable-http-proxy /tmp/configurable-http-proxy
 WORKDIR /tmp/configurable-http-proxy
@@ -85,7 +94,7 @@ RUN R -e 'install.packages(c("rzmq", "repr", "IRkernel", "IRdisplay"), repos = c
 
 # Install some extra kernels:
 RUN pip3 install git+https://github.com/Calysto/octave_kernel.git
-# RUN npm install -g ijavascript # Doesn't seem to work.
+# RUN npm install -g ijavascript # Doesn't seem to hook into Jupyter.
 RUN pip2 install bash_kernel
 RUN pip3 install bash_kernel
 RUN python2 -m bash_kernel.install
