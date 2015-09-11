@@ -25,22 +25,42 @@ RUN apt-get install -y vim emacs24-nox
 # Get the latest Python packages for python2 and python3.
 # Conda would be better, but I can't make it work correctly.
 RUN pip2 install --upgrade pip
+RUN pip2 install --upgrade urllib3[secure]
+RUN pip2 install --upgrade cython
 RUN pip2 install --upgrade numpy
 RUN pip2 install --upgrade scipy
-RUN pip2 install --upgrade pymc
+RUN pip2 install --upgrade bokeh
+RUN pip2 install --upgrade seaborn
+RUN pip2 install --upgrade sympy
 RUN pip2 install --upgrade scikit-learn
-RUN pip2 install git+https://github.com/pymc-devs/pymc
+RUN pip2 install --upgrade scikit-image
+# RUN pip2 install --upgrade git+https://github.com/BVLC/caffe@rc2
+RUN pip2 install --upgrade git+https://github.com/pymc-devs/pymc@2.3.4
+RUN pip2 install --upgrade git+https://github.com/Theano/theano@rel-0.7
+RUN pip2 install --upgrade git+https://github.com/Lasagne/lasagne@v0.1
+# RUN pip2 install --upgrade git+https://github.com/lisa-lab/pylearn2
+RUN pip2 install --upgrade git+https://github.com/dnouri/nolearn.git@master#egg=nolearn==0.7.git
 RUN pip2 install --upgrade statsmodels
-RUN pip2 install terminado
+RUN pip2 install --upgrade terminado
 
 RUN pip3 install --upgrade pip
+RUN pip3 install --upgrade urllib3[secure]
+RUN pip3 install --upgrade cython
 RUN pip3 install --upgrade numpy
 RUN pip3 install --upgrade scipy
-RUN pip3 install --upgrade pymc
+RUN pip3 install --upgrade bokeh
+RUN pip3 install --upgrade seaborn
+RUN pip3 install --upgrade sympy
 RUN pip3 install --upgrade scikit-learn
-RUN pip3 install git+https://github.com/pymc-devs/pymc
+RUN pip3 install --upgrade scikit-image
+# RUN pip3 install --upgrade git+https://github.com/BVLC/caffe@rc2
+RUN pip3 install --upgrade git+https://github.com/pymc-devs/pymc@2.3.4
+RUN pip3 install --upgrade git+https://github.com/Theano/theano@rel-0.7
+RUN pip3 install --upgrade git+https://github.com/Lasagne/lasagne@v0.1
+# RUN pip3 install --upgrade git+https://github.com/lisa-lab/pylearn2
+RUN pip3 install --upgrade git+https://github.com/dnouri/nolearn.git@master#egg=nolearn==0.7.git
 RUN pip3 install --upgrade statsmodels
-RUN pip3 install terminado
+RUN pip3 install --upgrade terminado
 
 # New Julia and R installation (from
 # https://github.com/jupyter/docker-demo-images/blob/master/Dockerfile),
