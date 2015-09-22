@@ -42,6 +42,7 @@ RUN pip2 install --upgrade git+https://github.com/Lasagne/lasagne@v0.1
 RUN pip2 install --upgrade git+https://github.com/dnouri/nolearn.git@master#egg=nolearn==0.7.git
 RUN pip2 install --upgrade statsmodels
 RUN pip2 install --upgrade terminado
+RUN pip2 install --upgrade xlrd
 
 RUN pip3 install --upgrade pip
 RUN pip3 install --upgrade urllib3[secure]
@@ -61,6 +62,7 @@ RUN pip3 install --upgrade git+https://github.com/Lasagne/lasagne@v0.1
 RUN pip3 install --upgrade git+https://github.com/dnouri/nolearn.git@master#egg=nolearn==0.7.git
 RUN pip3 install --upgrade statsmodels
 RUN pip3 install --upgrade terminado
+RUN pip3 install --upgrade xlrd
 
 # New Julia and R installation (from
 # https://github.com/jupyter/docker-demo-images/blob/master/Dockerfile),
