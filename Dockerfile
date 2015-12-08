@@ -7,7 +7,8 @@ MAINTAINER Matt Edwards <matted@mit.edu>
 RUN apt-get update
 RUN apt-get install -y python-tz python3-tz python2.7-pyparsing \
 python-pyparsing python3-pyparsing libxrender1 fonts-dejavu gfortran \
-gcc libzmq3-dev libzmq3 libxml2-dev libopenblas-dev liblapack-dev
+gcc libzmq3-dev libzmq3 libxml2-dev libopenblas-dev liblapack-dev \
+vim emacs24-nox wget
 
 RUN apt-get install -y octave octave-data-smoothing octave-dataframe \
 octave-econometrics octave-financial octave-financial octave-ga \
@@ -20,7 +21,26 @@ octave-strings octave-symbolic octave-tsa
 RUN echo "matted ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 RUN echo "thashim ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-RUN apt-get install -y vim emacs24-nox
+# Install nvidia drivers (from https://github.com/Kaixhin/dockerfiles).
+RUN cd /tmp && \
+# Download run file
+  wget http://developer.download.nvidia.com/compute/cuda/7_0/Prod/local_installers/cuda_7.0.28_linux.run && \
+# Make the run file executable and extract
+  chmod +x cuda_*_linux.run && ./cuda_*_linux.run -extract=`pwd` && \
+# Install CUDA drivers (silent, no kernel)
+  ./NVIDIA-Linux-x86_64-*.run -s --no-kernel-module && \
+# Install toolkit (silent)  
+  ./cuda-linux64-rel-*.run -noprompt && \
+# Clean up
+  rm -rf *
+
+# Set up environment variables.
+ENV PATH=/usr/local/cuda/bin:$PATH
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# This doesn't work, and I don't know why.
+# Use /cluster/$USER/.theanorc instead.
+ENV THEANO_FLAGS=device=gpu,floatX=float32
 
 # Get the latest Python packages for python2 and python3.
 # Conda would be better, but I can't make it work correctly.
@@ -35,11 +55,11 @@ RUN pip2 install --upgrade sympy
 RUN pip2 install --upgrade scikit-learn
 RUN pip2 install --upgrade scikit-image
 # RUN pip2 install --upgrade git+https://github.com/BVLC/caffe@rc2
-RUN pip2 install --upgrade git+https://github.com/pymc-devs/pymc@2.3.4
-RUN pip2 install --upgrade git+https://github.com/Theano/theano@rel-0.7
-RUN pip2 install --upgrade git+https://github.com/Lasagne/lasagne@v0.1
+# RUN pip2 install --upgrade git+https://github.com/pymc-devs/pymc@2.3.4
+RUN pip2 install --upgrade git+https://github.com/Theano/theano
+RUN pip2 install --upgrade git+https://github.com/Lasagne/lasagne
 # RUN pip2 install --upgrade git+https://github.com/lisa-lab/pylearn2
-RUN pip2 install --upgrade git+https://github.com/dnouri/nolearn.git@master#egg=nolearn==0.7.git
+RUN pip2 install --upgrade git+https://github.com/dnouri/nolearn.git
 RUN pip2 install --upgrade statsmodels
 RUN pip2 install --upgrade terminado
 RUN pip2 install --upgrade xlrd
@@ -55,11 +75,11 @@ RUN pip3 install --upgrade sympy
 RUN pip3 install --upgrade scikit-learn
 RUN pip3 install --upgrade scikit-image
 # RUN pip3 install --upgrade git+https://github.com/BVLC/caffe@rc2
-RUN pip3 install --upgrade git+https://github.com/pymc-devs/pymc@2.3.4
-RUN pip3 install --upgrade git+https://github.com/Theano/theano@rel-0.7
-RUN pip3 install --upgrade git+https://github.com/Lasagne/lasagne@v0.1
+# RUN pip3 install --upgrade git+https://github.com/pymc-devs/pymc@2.3.4
+RUN pip3 install --upgrade git+https://github.com/Theano/theano
+RUN pip3 install --upgrade git+https://github.com/Lasagne/lasagne
 # RUN pip3 install --upgrade git+https://github.com/lisa-lab/pylearn2
-RUN pip3 install --upgrade git+https://github.com/dnouri/nolearn.git@master#egg=nolearn==0.7.git
+RUN pip3 install --upgrade git+https://github.com/dnouri/nolearn.git
 RUN pip3 install --upgrade statsmodels
 RUN pip3 install --upgrade terminado
 RUN pip3 install --upgrade xlrd
@@ -67,6 +87,7 @@ RUN pip3 install --upgrade xlrd
 # New Julia and R installation (from
 # https://github.com/jupyter/docker-demo-images/blob/master/Dockerfile),
 # mixed with old approach that gets more recent versions from PPAs.
+RUN apt-get update
 RUN apt-get install software-properties-common python-software-properties -y && \
     add-apt-repository "deb http://cran.rstudio.com/bin/linux/ubuntu trusty/" && \
     gpg --keyserver keyserver.ubuntu.com --recv-key E084DAB9 && \
@@ -117,11 +138,8 @@ RUN R -e 'install.packages(c("IRkernel", "IRdisplay"), repos = c("http://irkerne
 
 # Install some extra kernels:
 RUN pip3 install git+https://github.com/Calysto/octave_kernel.git
-# RUN npm install -g ijavascript # Doesn't seem to hook into Jupyter.
-RUN pip2 install bash_kernel
-RUN pip3 install bash_kernel
-RUN python2 -m bash_kernel.install
-RUN python3 -m bash_kernel.install
+RUN pip2 install --upgrade bash_kernel
+RUN pip3 install --upgrade bash_kernel
 
 WORKDIR /srv/jupyterhub/
 
