@@ -8,7 +8,7 @@ RUN apt-get update
 RUN apt-get install -y python-tz python3-tz python2.7-pyparsing \
 python-pyparsing python3-pyparsing libxrender1 fonts-dejavu gfortran \
 gcc libzmq3-dev libzmq3 libxml2-dev libopenblas-dev liblapack-dev \
-vim emacs24-nox wget
+vim emacs24-nox wget zsh
 
 RUN apt-get install -y octave octave-data-smoothing octave-dataframe \
 octave-econometrics octave-financial octave-financial octave-ga \
