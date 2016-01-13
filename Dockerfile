@@ -4,8 +4,7 @@ FROM ipython/scipystack
 MAINTAINER Matt Edwards <matted@mit.edu>
 
 # Prepare basic system:
-RUN apt-get update
-RUN apt-get install -y python-tz python3-tz python2.7-pyparsing \
+RUN apt-get update && apt-get install -y python-tz python3-tz python2.7-pyparsing \
 python-pyparsing python3-pyparsing libxrender1 fonts-dejavu gfortran \
 gcc libzmq3-dev libzmq3 libxml2-dev libopenblas-dev liblapack-dev \
 vim emacs24-nox wget zsh
@@ -63,6 +62,7 @@ RUN pip2 install --upgrade git+https://github.com/dnouri/nolearn.git
 RUN pip2 install --upgrade statsmodels
 RUN pip2 install --upgrade terminado
 RUN pip2 install --upgrade xlrd
+RUN pip2 install --upgrade tables
 
 RUN pip3 install --upgrade pip
 RUN pip3 install --upgrade urllib3[secure]
@@ -83,6 +83,7 @@ RUN pip3 install --upgrade git+https://github.com/dnouri/nolearn.git
 RUN pip3 install --upgrade statsmodels
 RUN pip3 install --upgrade terminado
 RUN pip3 install --upgrade xlrd
+RUN pip3 install --upgrade tables
 
 # New Julia and R installation (from
 # https://github.com/jupyter/docker-demo-images/blob/master/Dockerfile),
